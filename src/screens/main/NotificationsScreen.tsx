@@ -1,123 +1,147 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   StatusBar,
-  Switch,
+  ActivityIndicator
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useAuth } from "../../context/AuthContext";
+import { notificationService } from "../../services/notification.service";
 
 export const NotificationsScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
-  const [settings, setSettings] = useState({
-    push: true,
-    email: false,
-    sms: false,
-    tournaments: true,
-    rewards: true,
-    security: true,
-  });
+  const { authData } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const ToggleItem = ({ title, desc, value, onValueChange, icon }: any) => (
-    <View style={styles.item}>
-      <View style={styles.itemLeft}>
-        <View style={styles.iconContainer}>
-          <MaterialIcons name={icon} size={20} color="#f47b25" />
+  // Constants
+  const COLORS = {
+    primary: "#f47b25",
+    bgDark: "#0d0d0d",
+    cardDark: "#1a1a1a",
+    textLight: "#ffffff",
+    textDim: "rgba(255,255,255,0.6)",
+  };
+
+  useEffect(() => {
+    let unsubscribe = () => { };
+
+    const fetchNotifications = async () => {
+      if (authData?._id) {
+        unsubscribe = notificationService.subscribeToNotifications(
+          authData._id,
+          (data) => {
+            setNotifications(data);
+            setLoading(false);
+          }
+        );
+      } else {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+
+    return () => unsubscribe();
+  }, [authData]);
+
+  const handleNotificationPress = async (item: any) => {
+    if (!item.isRead && authData?._id) {
+      // Only try to mark as read if it's not a global broadcast (or handle locally)
+      // Since the service logic for 'ALL' is tricky without local store, 
+      // we simply call it. If it fails or updates for everyone, that's the current trade-off.
+      // However, we should pass userId if we change service signature.
+      await notificationService.markAsRead(item.id, authData._id);
+    }
+    // Handle navigation if payload exists, e.g. navigate to MatchDetail
+    if (item.data && item.data.matchId) {
+      navigation.navigate("MatchDetail", { matchId: item.data.matchId });
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (authData?._id) {
+      await notificationService.markAllAsRead(authData._id);
+    }
+  };
+
+  const renderItem = ({ item }: any) => {
+    const isRead = item.isRead;
+
+    // Determine icon based on type
+    let iconName: any = "notifications";
+    let iconColor = COLORS.primary;
+
+    if (item.type === "MATCH_JOIN") iconName = "sports-esports";
+    if (item.type === "WALLET") {
+      iconName = "account-balance-wallet";
+      iconColor = "#22c55e"; // Green
+    }
+    if (item.type === "SYSTEM") iconName = "info";
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.itemContainer,
+          !isRead && styles.unreadItem
+        ]}
+        onPress={() => handleNotificationPress(item)}
+      >
+        <View style={[styles.iconContainer, { backgroundColor: `${iconColor}20` }]}>
+          <MaterialIcons name={iconName} size={24} color={iconColor} />
         </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.itemTitle}>{title}</Text>
-          <Text style={styles.itemDesc}>{desc}</Text>
+        <View style={styles.contentContainer}>
+          <Text style={[styles.title, !isRead && styles.unreadText]}>{item.title}</Text>
+          <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
+          <Text style={styles.time}>
+            {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : 'Just now'}
+          </Text>
         </View>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: "#333", true: "#f47b25" }}
-        thumbColor="#fff"
-      />
-    </View>
-  );
+        {!isRead && (
+          <View style={styles.unreadDot} />
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
-      {/* Decorative Glows */}
-      <View style={styles.bgGlowTop} />
-      <View style={styles.bgGlowBottom} />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" />
 
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="chevron-left" size={28} color="white" />
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
+        <TouchableOpacity onPress={handleMarkAllRead}>
+          <Text style={styles.markReadText}>Read All</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-      >
-        <Text style={styles.sectionTitle}>CHANNEL SETTINGS</Text>
-        <View style={styles.card}>
-          <ToggleItem 
-            title="Push Notifications" 
-            desc="System alerts and real-time updates"
-            value={settings.push}
-            onValueChange={(v: boolean) => setSettings({...settings, push: v})}
-            icon="notifications"
-          />
-          <View style={styles.divider} />
-          <ToggleItem 
-            title="Email Notifications" 
-            desc="Weekly digests and account activity"
-            value={settings.email}
-            onValueChange={(v: boolean) => setSettings({...settings, email: v})}
-            icon="email"
-          />
-          <View style={styles.divider} />
-          <ToggleItem 
-            title="SMS Alerts" 
-            desc="Critical security and payment alerts"
-            value={settings.sms}
-            onValueChange={(v: boolean) => setSettings({...settings, sms: v})}
-            icon="sms"
-          />
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
-
-        <Text style={styles.sectionTitle}>ACTIVITY TYPES</Text>
-        <View style={styles.card}>
-          <ToggleItem 
-            title="Tournament Updates" 
-            desc="Match starts, results, and invites"
-            value={settings.tournaments}
-            onValueChange={(v: boolean) => setSettings({...settings, tournaments: v})}
-            icon="military-tech"
-          />
-          <View style={styles.divider} />
-          <ToggleItem 
-            title="Rewards & Promotions" 
-            desc="Gifts, bonuses, and special offers"
-            value={settings.rewards}
-            onValueChange={(v: boolean) => setSettings({...settings, rewards: v})}
-            icon="card-giftcard"
-          />
-          <View style={styles.divider} />
-          <ToggleItem 
-            title="Security Alerts" 
-            desc="New logins and account changes"
-            value={settings.security}
-            onValueChange={(v: boolean) => setSettings({...settings, security: v})}
-            icon="shield"
-          />
-        </View>
-      </ScrollView>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="notifications-none" size={64} color={COLORS.textDim} />
+              <Text style={styles.emptyText}>No notifications yet</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };
@@ -130,100 +154,91 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 24,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "white",
+  },
+  markReadText: {
+    color: "#f47b25",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listContent: {
+    padding: 16,
+  },
+  itemContainer: {
+    flexDirection: "row",
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    alignItems: "center",
+  },
+  unreadItem: {
+    borderColor: "rgba(244,123,37,0.3)",
+    backgroundColor: "rgba(244,123,37,0.05)",
+  },
+  iconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
-  headerTitle: {
-    fontSize: 20,
+  contentContainer: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.9)",
+    marginBottom: 4,
+  },
+  unreadText: {
     fontWeight: "bold",
     color: "white",
-    marginLeft: 16,
   },
-  scrollView: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "rgba(255,255,255,0.4)",
-    letterSpacing: 1.5,
-    marginTop: 32,
-    marginBottom: 12,
-    marginLeft: 4,
-  },
-  card: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    overflow: "hidden",
-  },
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-  },
-  itemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    flex: 1,
-  },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "rgba(244,123,37,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textContainer: {
-    flex: 1,
-  },
-  itemTitle: {
-    color: "white",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  itemDesc: {
-    color: "rgba(255,255,255,0.4)",
+  body: {
     fontSize: 12,
-    marginTop: 2,
+    color: "rgba(255,255,255,0.6)",
+    marginBottom: 4,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    marginHorizontal: 20,
+  time: {
+    fontSize: 10,
+    color: "rgba(255,255,255,0.4)",
   },
-  bgGlowTop: {
-    position: "absolute",
-    top: "-10%",
-    right: "-20%",
-    width: 300,
-    height: 300,
-    backgroundColor: "rgba(244,123,37,0.15)",
-    borderRadius: 150,
-    opacity: 0.5,
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#f47b25",
+    marginLeft: 8,
   },
-  bgGlowBottom: {
-    position: "absolute",
-    bottom: "-10%",
-    left: "-20%",
-    width: 300,
-    height: 300,
-    backgroundColor: "rgba(37,99,235,0.1)",
-    borderRadius: 150,
-    opacity: 0.5,
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 100,
+    gap: 16,
   },
+  emptyText: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 16,
+  }
 });

@@ -12,7 +12,7 @@ import {
   StatusBar,
   Linking,
 } from "react-native";
-import * as Location from 'expo-location';
+import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
@@ -20,43 +20,25 @@ import { BlurView } from "expo-blur";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
+import { notificationService } from "../../services/notification.service";
+
+
 const { width } = Dimensions.get("window");
 
 export const HomeScreen = ({ navigation }: any) => {
   const { signOut, authData } = useAuth();
   const insets = useSafeAreaInsets();
   const [matches, setMatches] = useState<any[]>([]);
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [featuredMatches, setFeaturedMatches] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
   const [isMediator, setIsMediator] = useState(true);
 
-  // Promotional Banners Data
-  const [banners] = useState([
-    {
-      id: "1",
-      title: "Republic Day Special",
-      description: "Celebrate 26th January with exclusive tournaments!",
-      imageUrl:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuAh5AJVtKymLINB1Rn9KLf0PTMYIkgB3Q5LIzoxYUINBFDPzQKls6ZwkJRVwtMGgSP-izheoxRyYg5y3VnHsRTCrzjABw8IpQlH49m6qQcQgNjaXyQ75nJRP5zicKoCr3_OTd7cXc8wtgyKTK5_WBGmfX56S4sVxbxTwlYRcated-55EhAJOC1lWr1Z3_zIVl8ejuZV5mXk3_pqyBGlU1nma9h1VH3TqElVc3gciyzvzZVe4V02RIOi7r8loAkIU2n5sFgMU7LZ-pI",
-      link: "https://example.com/republic-day",
-    },
-    {
-      id: "2",
-      title: "Premium Pass Sale",
-      description: "Get 50% off on Elite Pass - Limited Time!",
-      imageUrl:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuBiokFGsQTFjhZMf5x3736lpl3xNrKeiD-wkMz-A4EV5OoWqNtN9B7NuDbcRpFwFpDdf6cH9oycMLYLP0Db4B6jKuV9cip1gpIdn6zf_BKvK6NYuEssC5H4HzTKOIqkHh7zm2CoFsBIMUP_bSvag0vjhYbmdkj3AutApneXxZkHaGy58MnCWAqkiU065SCXDVMwAcvZsxjyiZ3yEjoBfLZWribYZ_7VNHi2x2c7kiqG0OdYXYxbo-8WMDEPCLWBafFRLFreTo6qZRM",
-      link: "https://example.com/premium-pass",
-    },
-    {
-      id: "3",
-      title: "New Game Mode",
-      description: "Try our new Battle Royale mode now!",
-      imageUrl:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuAwQWNaaBgdOXGVmuHX-vDdsW0B_K4GoKl2GcFXoCxPWPrQZ_yNXFZOV5TpsZC00vfqBOwhnsWVfPwodPRTwwgaukeSR6KstNxSN-kB2RD5o5ZN4Dtx6LRX9NuHKTTC52i8O1H4FEh0YIB2T81bmY0Gty3tZzDUJ_8kNaBqKGtXSoHDqmcZ8rBcGZ4mAEb-uJpfHgfiwd-2a7KZ8XkgHuZp6x3V_wCKtwO3E9IZoW6fvj41ubixnkcdl0NX9KIaqM0_5TRfzNgtXEQ",
-      link: "https://example.com/battle-royale",
-    },
-  ]);
+  const [banners, setBanners] = useState<any[]>([]);
 
   const COLORS = {
     primary: "#f47b25",
@@ -69,9 +51,12 @@ export const HomeScreen = ({ navigation }: any) => {
     (async () => {
       // Check permissions silently
       const { status } = await Location.getForegroundPermissionsAsync();
-      if (status === 'granted') {
+      if (status === "granted") {
         const loc = await Location.getCurrentPositionAsync({});
-        const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        const coords = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
         setLocation(coords);
         setHasLocationPermission(true);
         fetchMatches(coords);
@@ -79,14 +64,29 @@ export const HomeScreen = ({ navigation }: any) => {
         fetchMatches(null);
       }
 
+      fetchFeaturedMatches();
+
       try {
-        const medRes = await api.get('/matches/mediator/check');
+        const medRes = await api.get("/matches/mediator/check");
         setIsMediator(medRes.data.isMediator);
       } catch (e) { }
     })();
   }, []);
 
-  const fetchMatches = async (locCoords?: { latitude: number; longitude: number } | null) => {
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get("/banners");
+        setBanners(res.data.data || []);
+      } catch (e) {
+        setBanners([]);
+      }
+    })();
+  }, []);
+
+  const fetchMatches = async (
+    locCoords?: { latitude: number; longitude: number } | null,
+  ) => {
     try {
       const params: any = {};
       if (locCoords) {
@@ -95,6 +95,13 @@ export const HomeScreen = ({ navigation }: any) => {
       }
       const res = await api.get("/matches", { params });
       setMatches(res.data.data);
+    } catch (err) { }
+  };
+
+  const fetchFeaturedMatches = async () => {
+    try {
+      const res = await api.get("/matches", { params: { featured: 'true' } });
+      setFeaturedMatches(res.data.data || []);
     } catch (err) { }
   };
 
@@ -263,26 +270,26 @@ export const HomeScreen = ({ navigation }: any) => {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 140 }}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <Text style={styles.headerTitle}>
             BATTLE<Text style={{ color: COLORS.primary }}>CORE</Text>
           </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flexDirection: "row", gap: 12 }}>
             <TouchableOpacity
-              style={styles.walletButton}
-              onPress={() => navigation.navigate("Wallet")}
+              style={styles.iconButton}
+              onPress={() => navigation.navigate("Notifications")}
             >
-              <MaterialIcons
-                name="account-balance-wallet"
-                size={14}
-                color={COLORS.primary}
-              />
-              <Text style={styles.walletText}>$0.00</Text>
+              <MaterialIcons name="notifications" size={20} color="white" />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
-
         {/* Promotional Banners Slider */}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -291,39 +298,38 @@ export const HomeScreen = ({ navigation }: any) => {
             gap: 16,
             marginBottom: 24,
           }}
-          pagingEnabled={false}
         >
-          {banners.map((banner) => (
-            <TouchableOpacity
-              key={banner.id}
-              style={styles.bannerCard}
-              onPress={() => {
-                if (banner.link) {
-                  Linking.openURL(banner.link).catch((err) =>
-                    Alert.alert("Error", "Could not open link")
-                  );
-                }
-              }}
-              activeOpacity={0.9}
-            >
-              <View style={styles.bannerImageContainer}>
-                <Image
-                  source={{ uri: banner.imageUrl }}
-                  style={styles.bannerImage}
-                />
-                <LinearGradient
-                  colors={["transparent", COLORS.cardDark]}
-                  style={styles.gradientOverlay}
-                />
-              </View>
-              <View style={styles.bannerContent}>
-                <Text style={styles.bannerTitle}>{banner.title}</Text>
-                <Text style={styles.bannerDescription}>
-                  {banner.description}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {banners
+            ?.filter((banner) => banner.is_active)
+            .map((banner: any) => (
+              <TouchableOpacity
+                key={banner._id}
+                style={styles.bannerCard}
+                onPress={() => {
+                  if (banner.link_url) {
+                    Linking.openURL(banner.link_url);
+                  }
+                }}
+              >
+                <View style={styles.bannerImageContainer}>
+                  <Image
+                    source={{ uri: banner.image_url }}
+                    style={styles.bannerImage}
+                  />
+                  <LinearGradient
+                    colors={["transparent", COLORS.cardDark]}
+                    style={styles.gradientOverlay}
+                  />
+                </View>
+
+                <View style={styles.bannerContent}>
+                  <Text style={styles.bannerTitle}>{banner.title}</Text>
+                  <Text style={styles.bannerDescription}>
+                    {banner.description}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
         </ScrollView>
 
         {/* Quick Actions */}
@@ -341,47 +347,75 @@ export const HomeScreen = ({ navigation }: any) => {
             style={styles.actionCard}
             onPress={() => navigation.navigate("CreateMatch")}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: "rgba(244,123,37,0.1)" }]}>
+            <View
+              style={[
+                styles.actionIconBg,
+                { backgroundColor: "rgba(244,123,37,0.1)" },
+              ]}
+            >
               <MaterialIcons
                 name="add-circle"
                 size={20}
                 color={COLORS.primary}
               />
             </View>
-            <Text style={styles.actionText} numberOfLines={1}>CREATE</Text>
+            <Text style={styles.actionText} numberOfLines={1}>
+              CREATE
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => navigation.navigate("MyEvents")}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: "rgba(168, 85, 247, 0.1)" }]}>
+            <View
+              style={[
+                styles.actionIconBg,
+                { backgroundColor: "rgba(168, 85, 247, 0.1)" },
+              ]}
+            >
               <MaterialIcons name="event-note" size={20} color="#a855f7" />
             </View>
-            <Text style={styles.actionText} numberOfLines={1}>MY EVENTS</Text>
+            <Text style={styles.actionText} numberOfLines={1}>
+              MY EVENTS
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => navigation.navigate("JoinRoomScreen")}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: "rgba(234,179,8,0.1)" }]}>
+            <View
+              style={[
+                styles.actionIconBg,
+                { backgroundColor: "rgba(234,179,8,0.1)" },
+              ]}
+            >
               <MaterialIcons name="login" size={24} color="#eab308" />
             </View>
-            <Text style={styles.actionText} numberOfLines={1}>JOIN</Text>
+            <Text style={styles.actionText} numberOfLines={1}>
+              JOIN
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => navigation.navigate("UploadScreenshot")}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: "rgba(37,99,235,0.1)" }]}>
+            <View
+              style={[
+                styles.actionIconBg,
+                { backgroundColor: "rgba(37,99,235,0.1)" },
+              ]}
+            >
               <MaterialIcons
                 name="cloud-upload"
                 size={24}
                 color={COLORS.accentBlue}
               />
             </View>
-            <Text style={styles.actionText} numberOfLines={1}>UPLOAD SS</Text>
+            <Text style={styles.actionText} numberOfLines={1}>
+              UPLOAD SS
+            </Text>
           </TouchableOpacity>
 
           {isMediator && (
@@ -389,14 +423,17 @@ export const HomeScreen = ({ navigation }: any) => {
               style={styles.actionCard}
               onPress={() => navigation.navigate("MediatorDashboard")}
             >
-              <View style={[styles.actionIconBg, { backgroundColor: "rgba(220, 38, 38, 0.1)" }]}>
-                <MaterialIcons
-                  name="gavel"
-                  size={24}
-                  color="#ef4444"
-                />
+              <View
+                style={[
+                  styles.actionIconBg,
+                  { backgroundColor: "rgba(220, 38, 38, 0.1)" },
+                ]}
+              >
+                <MaterialIcons name="gavel" size={24} color="#ef4444" />
               </View>
-              <Text style={styles.actionText} numberOfLines={1}>MEDIATOR</Text>
+              <Text style={styles.actionText} numberOfLines={1}>
+                MEDIATOR
+              </Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -412,25 +449,47 @@ export const HomeScreen = ({ navigation }: any) => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, gap: 16 }}
         >
-          {renderFeaturedEvent({
-            title: "Grandmaster Invitational",
-            entry: "$5.00",
-            prize: "$1,500",
-            rating: "4.8",
-            image:
-              "https://lh3.googleusercontent.com/aida-public/AB6AXuAh5AJVtKymLINB1Rn9KLf0PTMYIkgB3Q5LIzoxYUINBFDPzQKls6ZwkJRVwtMGgSP-izheoxRyYg5y3VnHsRTCrzjABw8IpQlH49m6qQcQgNjaXyQ75nJRP5zicKoCr3_OTd7cXc8wtgyKTK5_WBGmfX56S4sVxbxTwlYRcated-55EhAJOC1lWr1Z3_zIVl8ejuZV5mXk3_pqyBGlU1nma9h1VH3TqElVc3gciyzvzZVe4V02RIOi7r8loAkIU2n5sFgMU7LZ-pI",
-            verified: true,
-          })}
-          {renderFeaturedEvent({
-            title: "Cyber Duel 2v2",
-            entry: "Free",
-            prize: "$250",
-            rating: "4.5",
-            image:
-              "https://lh3.googleusercontent.com/aida-public/AB6AXuBiokFGsQTFjhZMf5x3736lpl3xNrKeiD-wkMz-A4EV5OoWqNtN9B7NuDbcRpFwFpDdf6cH9oycMLYLP0Db4B6jKuV9cip1gpIdn6zf_BKvK6NYuEssC5H4HzTKOIqkHh7zm2CoFsBIMUP_bSvag0vjhYbmdkj3AutApneXxZkHaGy58MnCWAqkiU065SCXDVMwAcvZsxjyiZ3yEjoBfLZWribYZ_7VNHi2x2c7kiqG0OdYXYxbo-8WMDEPCLWBafFRLFreTo6qZRM",
-            verified: true,
-            full: true,
-          })}
+          {featuredMatches.length > 0 ? (
+            featuredMatches.map((item) => (
+              <TouchableOpacity
+                key={item._id}
+                onPress={() => navigation.navigate("MatchDetail", { matchId: item._id })}
+              >
+                {renderFeaturedEvent({
+                  title: item.title,
+                  entry: item.entry_fee > 0 ? `$${item.entry_fee.toFixed(2)}` : "Free",
+                  prize: `$${item.prize_pool.toLocaleString()}`,
+                  rating: "5.0",
+                  image: item.banner_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuAwQWNaaBgdOXGVmuHX-vDdsW0B_K4GoKl2GcFXoCxPWPrQZ_yNXFZOV5TpsZC00vfqBOwhnsWVfPwodPRTwwgaukeSR6KstNxSN-kB2RD5o5ZN4Dtx6LRX9NuHKTTC52i8O1H4FEh0YIB2T81bmY0Gty3tZzDUJ_8kNaBqKGtXSoHDqmcZ8rBcGZ4mAEb-uJpfHgfiwd-2a7KZ8XkgHuZp6x3V_wCKtwO3E9IZoW6fvj41ubixnkcdl0NX9KIaqM0_5TRfzNgtXEQ", // Fallback
+                  verified: true,
+                  full: item.participants && item.participants.length >= item.max_players,
+                })}
+              </TouchableOpacity>
+            ))
+          ) : (
+            // Fallback to placeholders if no featured events
+            <>
+              {renderFeaturedEvent({
+                title: "Grandmaster Invitational",
+                entry: "$5.00",
+                prize: "$1,500",
+                rating: "4.8",
+                image:
+                  "https://lh3.googleusercontent.com/aida-public/AB6AXuAh5AJVtKymLINB1Rn9KLf0PTMYIkgB3Q5LIzoxYUINBFDPzQKls6ZwkJRVwtMGgSP-izheoxRyYg5y3VnHsRTCrzjABw8IpQlH49m6qQcQgNjaXyQ75nJRP5zicKoCr3_OTd7cXc8wtgyKTK5_WBGmfX56S4sVxbxTwlYRcated-55EhAJOC1lWr1Z3_zIVl8ejuZV5mXk3_pqyBGlU1nma9h1VH3TqElVc3gciyzvzZVe4V02RIOi7r8loAkIU2n5sFgMU7LZ-pI",
+                verified: true,
+              })}
+              {renderFeaturedEvent({
+                title: "Cyber Duel 2v2",
+                entry: "Free",
+                prize: "$250",
+                rating: "4.5",
+                image:
+                  "https://lh3.googleusercontent.com/aida-public/AB6AXuBiokFGsQTFjhZMf5x3736lpl3xNrKeiD-wkMz-A4EV5OoWqNtN9B7NuDbcRpFwFpDdf6cH9oycMLYLP0Db4B6jKuV9cip1gpIdn6zf_BKvK6NYuEssC5H4HzTKOIqkHh7zm2CoFsBIMUP_bSvag0vjhYbmdkj3AutApneXxZkHaGy58MnCWAqkiU065SCXDVMwAcvZsxjyiZ3yEjoBfLZWribYZ_7VNHi2x2c7kiqG0OdYXYxbo-8WMDEPCLWBafFRLFreTo6qZRM",
+                verified: true,
+                full: true,
+              })}
+            </>
+          )}
         </ScrollView>
 
         {/* Sponsored Banner */}
@@ -461,10 +520,10 @@ export const HomeScreen = ({ navigation }: any) => {
 
         {/* Matches List */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{hasLocationPermission ? "MATCHES NEAR YOU" : "UPCOMING MATCHES"}</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("MatchesList")}
-          >
+          <Text style={styles.sectionTitle}>
+            {hasLocationPermission ? "MATCHES NEAR YOU" : "UPCOMING MATCHES"}
+          </Text>
+          <TouchableOpacity onPress={() => navigation.navigate("MatchesList")}>
             <Text style={styles.viewAll}>VIEW MORE</Text>
           </TouchableOpacity>
         </View>
@@ -608,6 +667,9 @@ export const HomeScreen = ({ navigation }: any) => {
           )}
         </View>
 
+        {/* Ad Banner */}
+
+
         {/* Stats Footer */}
         <View style={styles.statsFooter}>
           <View>
@@ -667,6 +729,35 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontStyle: "italic",
     letterSpacing: -1,
+  },
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#0d0d0d',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   walletButton: {
     flexDirection: "row",

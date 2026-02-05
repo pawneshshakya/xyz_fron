@@ -9,7 +9,8 @@ import {
     Dimensions,
     ActivityIndicator,
     RefreshControl,
-    Alert
+    Alert,
+    Image
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -22,12 +23,12 @@ const { width } = Dimensions.get("window");
 
 export const MyEventsScreen = ({ navigation }: any) => {
     const insets = useSafeAreaInsets();
-    const [filter, setFilter] = useState("All");
+
     const [matches, setMatches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    const categories = ["All", "Battle Royale", "Deathmatch", "Search & Destroy"];
+
 
     const fetchMatches = async () => {
         try {
@@ -94,10 +95,7 @@ export const MyEventsScreen = ({ navigation }: any) => {
         }
     };
 
-    const filteredMatches = matches.filter(m => {
-        if (filter === 'All') return true;
-        return m.game_type === filter || m.mode === filter;
-    });
+
 
     return (
         <View style={styles.container}>
@@ -140,20 +138,6 @@ export const MyEventsScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.filterBar}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
-                    {categories.map((cat) => (
-                        <TouchableOpacity
-                            key={cat}
-                            style={[styles.filterChip, filter === cat && styles.activeChip]}
-                            onPress={() => setFilter(cat)}
-                        >
-                            <Text style={[styles.chipText, filter === cat && styles.activeChipText]}>{cat.toUpperCase()}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
             {loading && !refreshing ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color="#f47b25" />
@@ -164,75 +148,82 @@ export const MyEventsScreen = ({ navigation }: any) => {
                     contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f47b25" />}
                 >
-                    {filteredMatches.length > 0 ? filteredMatches.map((item, index) => {
-                        const isDraft = item.isPublished === false;
-                        // Can delete/edit only if Draft or Open with no participants? (Backend logic handles strictness, UI just calls)
-                        // We'll show buttons if draft or creator.
+                    {matches.length > 0 ? matches.map((item, index) => {
+                        const isDraft = !item.isPublished;
+                        const participantsCount = item.participants?.length || 0;
+                        const maxPlayers = item.max_players || 100;
+                        const percent = Math.min(100, Math.round((participantsCount / maxPlayers) * 100));
+                        const progressColor = percent >= 100 ? '#22c55e' : '#f47b25';
+                        const mapImage = item.map_image || "https://lh3.googleusercontent.com/aida-public/AB6AXuAwQWNaaBgdOXGVmuHX-vDdsW0B_K4GoKl2GcFXoCxPWPrQZ_yNXFZOV5TpsZC00vfqBOwhnsWVfPwodPRTwwgaukeSR6KstNxSN-kB2RD5o5ZN4Dtx6LRX9NuHKTTC52i8O1H4FEh0YIB2T81bmY0Gty3tZzDUJ_8kNaBqKGtXSoHDqmcZ8rBcGZ4mAEb-uJpfHgfiwd-2a7KZ8XkgHuZp6x3V_wCKtwO3E9IZoW6fvj41ubixnkcdl0NX9KIaqM0_5TRfzNgtXEQ";
+
                         return (
-                            <View
-                                key={item._id || index}
-                                style={styles.matchCard}
-                            >
-                                <TouchableOpacity onPress={() => navigation.navigate("MatchDetail", { matchId: item._id })}>
-                                    <View style={styles.cardHeader}>
-                                        <View style={styles.typeBadge}>
-                                            <Text style={styles.typeText}>{item.game_type || "CUSTOM"}</Text>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                                            {isDraft && (
-                                                <View style={[styles.statusBadge, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-                                                    <Text style={[styles.statusText, { color: '#ffffff' }]}>DRAFT</Text>
+                            <View key={item._id || index} style={styles.cardContainer}>
+                                {/* Row 1: Thumbnail & Info */}
+                                <View style={styles.cardMainRow}>
+                                    {/* Thumbnail */}
+                                    <View style={styles.thumbnailContainer}>
+                                        <Image
+                                            source={{ uri: mapImage }}
+                                            style={styles.thumbnailImage}
+                                            resizeMode="cover"
+                                        />
+                                        <View style={styles.statusBadgeAbsolute}>
+                                            {isDraft ? (
+                                                <View style={[styles.badgeContainer, { backgroundColor: 'rgba(107, 114, 128, 0.9)' }]}>
+                                                    <Text style={styles.badgeText}>DRAFT</Text>
+                                                </View>
+                                            ) : (
+                                                <View style={[styles.badgeContainer, { backgroundColor: 'rgba(34, 197, 94, 0.9)', flexDirection: 'row', gap: 4 }]}>
+                                                    <View style={styles.livePulse} />
+                                                    <Text style={styles.badgeText}>LIVE</Text>
                                                 </View>
                                             )}
-                                            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}20` }]}>
-                                                <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
-                                            </View>
                                         </View>
                                     </View>
 
-                                    <Text style={styles.matchTitle}>{item.title}</Text>
-
-                                    <View style={styles.cardStats}>
-                                        <View style={styles.stat}>
-                                            <Text style={styles.statLabel}>ENTRY</Text>
-                                            <Text style={styles.statValue}>{item.entry_fee > 0 ? `$${item.entry_fee}` : 'FREE'}</Text>
-                                        </View>
-                                        <View style={styles.stat}>
-                                            <Text style={styles.statLabel}>PRIZE</Text>
-                                            <Text style={[styles.statValue, { color: '#f47b25' }]}>${item.prize_pool}</Text>
-                                        </View>
-                                        <View style={styles.stat}>
-                                            <Text style={styles.statLabel}>PLAYERS</Text>
-                                            <Text style={styles.statValue}>{item.participants?.length || 0}/{item.max_players}</Text>
+                                    {/* Info */}
+                                    <View style={styles.cardInfo}>
+                                        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                                        <Text style={styles.cardMeta}>{item.game_type || "Battle Royale"} • {item.mode || "Solo"}</Text>
+                                        <View style={styles.priceRow}>
+                                            <Text style={styles.entryFee}>₹{item.entry_fee}</Text>
+                                            <Text style={styles.separator}>|</Text>
+                                            <Text style={styles.prizePool}>Prize: ₹{item.prize_pool}</Text>
                                         </View>
                                     </View>
-                                </TouchableOpacity>
+                                </View>
 
-                                {/* Action Buttons */}
-                                <View style={styles.actionRow}>
+                                {/* Row 2: Progress */}
+                                <View style={styles.progressSection}>
+                                    <View style={styles.progressLabels}>
+                                        <Text style={styles.progressText}>Joined: {participantsCount}/{maxPlayers}</Text>
+                                        <Text style={[styles.progressPercent, { color: progressColor }]}>{percent}%</Text>
+                                    </View>
+                                    <View style={styles.progressBarBg}>
+                                        <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: progressColor }]} />
+                                    </View>
+                                </View>
+
+                                {/* Row 3: Action Grid */}
+                                <View style={styles.actionGrid}>
+                                    <TouchableOpacity style={styles.gridBtn} onPress={() => navigation.navigate("CreateMatch", { initialData: item })}>
+                                        <Text style={styles.gridBtnText}>Edit</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.gridBtn} onPress={() => navigation.navigate("MatchDetail", { matchId: item._id })}>
+                                        <Text style={styles.gridBtnText}>View</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.gridBtn, styles.gridBtnDelete]} onPress={() => handleDelete(item._id, item.title)}>
+                                        <Text style={styles.gridBtnTextDelete}>Delete</Text>
+                                    </TouchableOpacity>
+
                                     {isDraft ? (
-                                        <>
-                                            <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(item._id, item.title)}>
-                                                <MaterialIcons name="delete" size={20} color="#ef4444" />
-                                                <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Delete</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("CreateMatch", { initialData: item })}>
-                                                <MaterialIcons name="edit" size={20} color="white" />
-                                                <Text style={styles.actionBtnText}>Edit</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity style={styles.publishBtn} onPress={() => handlePublish(item._id, item.title)}>
-                                                <Text style={styles.publishBtnText}>PUBLISH</Text>
-                                                <MaterialIcons name="rocket-launch" size={16} color="white" />
-                                            </TouchableOpacity>
-                                        </>
+                                        <TouchableOpacity style={[styles.gridBtn, styles.gridBtnPrimary]} onPress={() => handlePublish(item._id, item.title)}>
+                                            <Text style={styles.gridBtnTextPrimary}>Publish</Text>
+                                        </TouchableOpacity>
                                     ) : (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
-                                            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>Event is Live</Text>
-                                            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("CreateMatch", { initialData: item })}>
-                                                <MaterialIcons name="edit" size={20} color="white" />
-                                                <Text style={styles.actionBtnText}>View/Edit</Text>
-                                            </TouchableOpacity>
-                                        </View>
+                                        <TouchableOpacity style={[styles.gridBtn, styles.gridBtnDisabled]} disabled>
+                                            <Text style={styles.gridBtnTextDisabled}>Live</Text>
+                                        </TouchableOpacity>
                                     )}
                                 </View>
                             </View>
@@ -292,133 +283,183 @@ const styles = StyleSheet.create({
         color: "white",
         marginLeft: 16,
     },
-    filterBar: {
-        paddingVertical: 16,
-    },
-    filterChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 12,
-        backgroundColor: "rgba(255,255,255,0.05)",
-        marginRight: 8,
-        borderWidth: 1,
-        borderColor: "transparent",
-    },
-    activeChip: {
-        backgroundColor: "rgba(244,123,37,0.1)",
-        borderColor: "#f47b25",
-    },
-    chipText: {
-        color: "rgba(255,255,255,0.4)",
-        fontSize: 10,
-        fontWeight: "900",
-        letterSpacing: 1,
-    },
-    activeChipText: {
-        color: "#f47b25",
-    },
+
     scrollView: {
         flex: 1,
     },
-    matchCard: {
+    cardContainer: {
         backgroundColor: "#1a1a1a",
         borderRadius: 20,
-        padding: 20,
+        padding: 16,
         marginBottom: 16,
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.05)",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 5,
     },
-    cardHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 12,
+    cardMainRow: {
+        flexDirection: 'row',
+        marginBottom: 16,
+        gap: 16,
     },
-    typeBadge: {
-        backgroundColor: "rgba(255,255,255,0.05)",
+    thumbnailContainer: {
+        position: 'relative',
+        width: 96,
+        height: 96,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.1)",
+    },
+    thumbnailImage: {
+        width: '100%',
+        height: '100%',
+    },
+    statusBadgeAbsolute: {
+        position: 'absolute',
+        top: 4,
+        left: 4,
+    },
+    badgeContainer: {
         paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    typeText: {
-        color: "rgba(255,255,255,0.4)",
-        fontSize: 10,
-        fontWeight: "bold",
-    },
-    statusBadge: {
-        paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 4,
-    },
-    statusText: {
-        fontSize: 8,
-        fontWeight: 'bold'
-    },
-    matchTitle: {
-        color: "white",
-        fontSize: 18,
-        fontWeight: "900",
-        fontStyle: "italic",
-        marginBottom: 20,
-    },
-    cardStats: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        borderTopWidth: 1,
-        borderTopColor: "rgba(255,255,255,0.05)",
-        paddingTop: 16,
-        marginBottom: 16,
-    },
-    stat: {
-        alignItems: "flex-start",
-    },
-    statLabel: {
-        color: "rgba(255,255,255,0.3)",
-        fontSize: 8,
-        fontWeight: "bold",
-        letterSpacing: 1,
-        marginBottom: 4,
-    },
-    statValue: {
-        color: "white",
-        fontSize: 14,
-        fontWeight: "bold",
-    },
-    actionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.05)',
-    },
-    actionBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-    },
-    actionBtnText: {
-        color: 'white',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    publishBtn: {
-        flex: 1,
-        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        backgroundColor: '#f47b25',
-        padding: 10,
-        borderRadius: 8,
+        backgroundColor: 'rgba(0,0,0,0.5)',
     },
-    publishBtnText: {
+    badgeText: {
         color: 'white',
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: 'bold',
+    },
+    livePulse: {
+        width: 6,
+        height: 6,
+        backgroundColor: 'white',
+        borderRadius: 3,
+    },
+    cardInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    cardTitle: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        lineHeight: 22,
+    },
+    cardMeta: {
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 10,
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
+        marginBottom: 8,
+    },
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    entryFee: {
+        color: '#f47b25',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    separator: {
+        color: 'rgba(255,255,255,0.2)',
+        fontSize: 12,
+    },
+    prizePool: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+    },
+    progressSection: {
+        marginBottom: 16,
+        paddingHorizontal: 4,
+    },
+    progressLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    progressText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    progressPercent: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    progressBarBg: {
+        width: '100%',
+        height: 6,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    actionGrid: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    gridBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+    },
+    gridBtnText: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    gridBtnDelete: {
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+    },
+    gridBtnTextDelete: {
+        color: '#ef4444',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    gridBtnPrimary: {
+        backgroundColor: '#f47b25',
+        borderColor: '#f47b25',
+        shadowColor: '#f47b25',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    gridBtnTextPrimary: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    gridBtnDisabled: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'transparent',
+    },
+    gridBtnTextDisabled: {
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
     },
     bgGlowTop: {
         position: "absolute",

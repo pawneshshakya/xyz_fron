@@ -1,36 +1,26 @@
 {
     "project_info": {
-        "project_number": "000000000000",
-        "project_id": "placeholder-project-id",
-        "storage_bucket": "placeholder-project-id.appspot.com"
+        "project_number": "720256141382",
+        "project_id": "battlecore-e9bf1",
+        "storage_bucket": "battlecore-e9bf1.firebasestorage.app"
     },
     "client": [
         {
             "client_info": {
-                "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                "mobilesdk_app_id": "1:720256141382:android:c5csgdghd39450581b36247",
                 "android_client_info": {
                     "package_name": "com.esports.battlecore"
                 }
             },
-            "oauth_client": [
-                {
-                    "client_id": "placeholder-client-id.apps.googleusercontent.com",
-                    "client_type": 3
-                }
-            ],
+            "oauth_client": [],
             "api_key": [
                 {
-                    "current_key": "bw876b876b876b876b876b876b876b876b876b8"
+                    "current_key": "AIzaSyAkt12DfMqJFFf6mbdfvjd4bo4FiqnR8Tg"
                 }
             ],
             "services": {
                 "appinvite_service": {
-                    "other_platform_oauth_client": [
-                        {
-                            "client_id": "placeholder-client-id.apps.googleusercontent.com",
-                            "client_type": 3
-                        }
-                    ]
+                    "other_platform_oauth_client": []
                 }
             }
         }
