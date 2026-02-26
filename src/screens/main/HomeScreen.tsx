@@ -21,6 +21,7 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
 import { notificationService } from "../../services/notification.service";
+import EventSource, { EventSourceListener } from "react-native-sse";
 
 
 const { width } = Dimensions.get("window");
@@ -73,15 +74,70 @@ export const HomeScreen = ({ navigation }: any) => {
     })();
   }, []);
 
+
+
   useEffect(() => {
-    (async () => {
+    let eventSource: EventSource | null = null;
+
+    const fetchBanners = async () => {
       try {
         const res = await api.get("/banners");
         setBanners(res.data.data || []);
       } catch (e) {
         setBanners([]);
       }
-    })();
+    };
+
+    fetchBanners();
+
+    try {
+      // Construct SSE URL
+      const baseURL = api.defaults.baseURL || 'http://192.168.1.4:5000/api';
+      const sseURL = `${baseURL}/sse/events`;
+
+      console.log("Connecting to SSE:", sseURL);
+
+      // Initialize EventSource from react-native-sse
+      eventSource = new EventSource(sseURL);
+
+      const listener: EventSourceListener = (event) => {
+        if (event.type === 'open') {
+          console.log("SSE Open:", event);
+        } else if (event.type === 'message') {
+          // react-native-sse returns event.data as string
+          // However, the listener event type is `EventSourceEvent`. 
+          // We need to cast or just access data.
+          // The event object structure: { type: 'message', data: '...' }
+          if (event.data) {
+            try {
+              const data = JSON.parse(event.data);
+              console.log("SSE Message:", data);
+              if (data.type === 'BANNER_UPDATE') {
+                fetchBanners();
+              }
+            } catch (e) {
+              console.error("SSE Parse Error", e);
+            }
+          }
+        } else if (event.type === 'error') {
+          console.error("SSE Error:", event);
+        }
+      };
+
+      eventSource.addEventListener("open", listener);
+      eventSource.addEventListener("message", listener);
+      eventSource.addEventListener("error", listener);
+
+    } catch (e) {
+      console.error("SSE Setup Failed", e);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.removeAllEventListeners();
+        eventSource.close();
+      }
+    };
   }, []);
 
   const fetchMatches = async (
